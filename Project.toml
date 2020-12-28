@@ -1,5 +1,5 @@
 name = "GoAround"
-#uuid = "4359cbaa-4cdd-4b01-a959-3890a951e047"
+uuid = "4359cbaa-4cdd-4b01-a959-3890a951e047"
 authors = ["lkruse <lamk98@gmail.com>"]
 version = "0.1.0"
 
