@@ -1,7 +1,8 @@
 module GoAround
 
-greet() = println("Hello World!")
+greet() = println("Mayday!")
+greetthree() = println("bye!")
 
-greettwo() = println("Goodbye!")
+#include("runtest.jl")
 
 end # module
