@@ -1,4 +1,4 @@
-using ContinuumWorld
+using GoAround
 using POMDPs
 using POMDPModelTools
 using POMDPModels

@@ -1,4 +1,4 @@
-module ContinuumWorld
+module GoAround
 
 # package code goes here
 using Random
