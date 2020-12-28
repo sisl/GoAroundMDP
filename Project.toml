@@ -1,4 +1,4 @@
-name = "HelloWorld"
-uuid = "5f0b9eb1-34f7-4e16-8e86-75c9a5680b95"
+name = "GoAround"
+uuid = "c21678db-951d-4d5c-be27-e78367976096"
 authors = ["lkruse <lamk98@gmail.com>"]
 version = "0.1.0"

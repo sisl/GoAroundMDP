@@ -1,4 +1,4 @@
-module HelloWorld
+module GoAround
 
 greet() = print("Hello World!")
 
