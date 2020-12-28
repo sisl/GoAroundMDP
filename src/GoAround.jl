@@ -1,5 +1,7 @@
 module GoAround
 
-greet() = print("Hello World!")
+greet() = println("Hello World!")
+
+greettwo() = println("Goodbye!")
 
 end # module
