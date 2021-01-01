@@ -4,8 +4,11 @@ authors = ["lkruse <lamk98@gmail.com>"]
 version = "0.1.0"
 
 [deps]
+Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 GridInterpolations = "bb4c363b-b914-514b-8517-4eb369bc008a"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LocalApproximationValueIteration = "a40420fb-f401-52da-a663-f502e5b95060"
+LocalFunctionApproximation = "db97f5ab-fc25-52dd-a8f9-02a257c35074"
 POMDPModelTools = "08074719-1b2a-587c-a292-00f91cc44415"
 POMDPs = "a93abf59-7444-517b-a68a-c42f96afdd7d"
 Parameters = "d96e819e-fc66-5662-9728-84c9c7592b0a"
@@ -15,7 +18,7 @@ Reel = "71555da5-176e-5e73-a222-aebc6c6e4f2f"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
-POMDPs = "0.8"
+POMDPs = "0.9"
 
 [extras]
 POMDPSimulators = "e0d0a172-29c6-5d4e-96d0-f262df5d01fd"

@@ -1,28 +1,18 @@
 using POMDPs
 using GridInterpolations
 using Reel
-using Plots;        
+using Plots 
+using LocalFunctionApproximation
+using LocalApproximationValueIteration       
 
-pyplot()
+plotly()
 
-w = CWorld()
+ga = GoAroundMDP()
 
-nx = 30; ny = 30
-grid = RectangleGrid(range(first(w.xlim), stop=last(w.xlim), length=nx), 
-                     range(first(w.ylim), stop=last(w.ylim), length=ny))
-solver = CWorldSolver(max_iters=30, m=50, grid=grid)
-policy = solve(solver, w)
+nx = 150; ny = 150
+grid = RectangleGrid(range(first(ga.xlim), stop=last(ga.xlim), length=nx), 
+                     range(first(ga.ylim), stop=last(ga.ylim), length=ny))
 
-frames = Frames(MIME("image/png"), fps=4)
-for i in 1:length(solver.value_hist)
-    v = solver.value_hist[i]
-    push!(frames, CWorldVis(w, f=s->evaluate(v,s), g=solver.grid, title="Value iteration step $i"))
-    print(".")
-end
-for i in 1:10
-    push!(frames, CWorldVis(w, f=s->action_ind(policy, s), g=solver.grid, title="Policy"))
-    print(".")
-end
-println()
-println(w.xlim)
-write("out.gif", frames)
+interp = LocalGIFunctionApproximator(grid)
+approx_solver = LocalApproximationValueIterationSolver(interp, verbose=true, max_iterations=1000, is_mdp_generative=false)
+approx_policy = solve(approx_solver, ga)

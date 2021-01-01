@@ -1,8 +1,10 @@
 module GoAround
 
 #*******************************************************************************
-# Packages
+# PACKAGES
+#*******************************************************************************
 using Random
+using Distributions
 using LinearAlgebra
 using POMDPs
 using StaticArrays
@@ -10,83 +12,105 @@ using Parameters
 using GridInterpolations
 using POMDPModelTools
 using Plots
-#plotly()
+
+#*******************************************************************************
+# SETUP
+#*******************************************************************************
+plotly()
 
 export
-    CWorld,
-    CWorldVis,
-    CircularRegion,
-    Vec2,
-    CWorldSolver,
-    
-    evaluate,
-    action_ind
+    GoAroundMDP,
+    GoAroundMDPVis,
+    GAState
 
-const Vec2 = SVector{2, Float64}
-
-struct CircularRegion
-    center::Vec2
-    radius::Float64
+mutable struct GAState
+    x::Float64
+    v::Float64
+    t::Float64
 end
 
-Base.in(v::Vec2, r::CircularRegion) = LinearAlgebra.norm(v-r.center) <= r.radius
-
-const card_and_stay = [Vec2(1.0, 0.0), Vec2(-1.0, 0.0), Vec2(0.0, 1.0), Vec2(0.0, -1.0), Vec2(0.0, 0.0)]
-const cardinal = [Vec2(1.0, 0.0), Vec2(-1.0, 0.0), Vec2(0.0, 1.0), Vec2(0.0, -1.0)]
-const default_regions = [CircularRegion(Vec2(3.5, 2.5), 0.5),
-                         CircularRegion(Vec2(3.5, 5.5), 0.5),
-                         CircularRegion(Vec2(8.5, 2.5), 0.5),
-                         CircularRegion(Vec2(7.5, 7.5), 0.5)]
-const default_rewards = [-10.0, -5.0, 10.0, 3.0]
-
-
-@with_kw struct CWorld <: MDP{Vec2, Vec2}
-    xlim::Tuple{Float64, Float64}                   = (0.0, 15.0)
-    ylim::Tuple{Float64, Float64}                   = (0.0, 15.0)
-    reward_regions::Vector{CircularRegion}          = default_regions
-    rewards::Vector{Float64}                        = default_rewards
-    terminal::Vector{CircularRegion}                = default_regions
-    stdev::Float64                                  = 0.5
-    actions::Vector{Vec2}                           = cardinal
+@with_kw struct GoAroundMDP <: MDP{GAState, Symbol}
+    xlim::Tuple{Float64, Float64}                   = (0.0, 50.0)
+    ylim::Tuple{Float64, Float64}                   = (0.0, 50.0)
     discount::Float64                               = 0.95
 end
 
-POMDPs.actions(w::CWorld) = w.actions
-POMDPs.n_actions(w::CWorld) = length(w.actions)
-POMDPs.discount(w::CWorld) = w.discount
+#*******************************************************************************
+# MDP FORMULATION
+#*******************************************************************************
+const go_around_actions = [:continue, :go_around]
+POMDPs.actions(ga::GoAroundMDP) = go_around_actions
+POMDPs.discount(ga::GoAroundMDP) = ga.discount
 
-function POMDPs.gen(::DDNNode{:sp}, w::CWorld, s::AbstractVector, a::AbstractVector, rng::AbstractRNG)
-    return s + a + w.stdev*randn(rng, Vec2)
+# Define the actionindex function
+function POMDPs.actionindex(ga::GoAroundMDP, a::Symbol)
+    if a==:continue
+        return 1
+    elseif a==:go_around
+        return 2
+    end
+    error("invalid GoAroundMDP action: $a")
 end
 
-function POMDPs.reward(w::CWorld, s::AbstractVector, a::AbstractVector, sp::AbstractVector) # XXX inefficient
+# Define the transition function
+function POMDPs.transition(ga::GoAroundMDP, s::GAState, a::Symbol)
+    if a==:continue
+        s.x = s.x + s.v
+        s.v = s.v + rand(Normal(0,1))
+        s.t = s.t - 1
+        return Deterministic(1.0)
+    else
+        s.x = 0
+        s.v = 0
+        s.t = s.t - 1
+        return Deterministic(1.0)
+    end
+end
+
+# Define the reward function
+function POMDPs.reward(ga::GoAroundMDP, s::GAState, a::Symbol)
     rew = 0.0
-    for (i,r) in enumerate(w.reward_regions)
-        if sp in r
-            rew += w.rewards[i]
+    if a==:continue
+        if s.t==1 && s.x==40
+            rew = -1
+        else
+            rew = 0
         end
+    elseif a==:go_around
+        rew = -10*(0.2)^s.t - 0.5
     end
     return rew
 end
 
-function POMDPs.isterminal(w::CWorld, s::Vec2) # XXX inefficient
-    for r in w.terminal
-        if s in r
-            return true
-        end
+# Define the isterminal function
+function POMDPs.isterminal(ga::GoAroundMDP, a::Symbol, s::GAState)
+    if a==:go_around || s.t==0 
+        return true 
     end
     return false
 end
 
-function POMDPs.initialstate(w::CWorld, rng::AbstractRNG)
-    x = w.xlim[1] + (w.xlim[2] - w.xlim[1]) * rand(rng)
-    y = w.ylim[1] + (w.ylim[2] - w.ylim[1]) * rand(rng)
-    return Vec2(x,y)
+# Define the initialstate function
+function POMDPs.initialstate(ga::GoAroundMDP)
+    x = 0
+    v = 1
+    t = 48
+    return GAState(x,v,t)
 end
 
-include("solver.jl")
-include("visualization.jl")
-include("runtest.jl")
+# Define conversion functions for LocalApproximationValueIteration
+function POMDPs.convert_s(::Type{V} where V <: AbstractVector{Float64}, 
+    s::GAState, mdp::GoAroundMDP)
+    v = SVector{2,Float64}(s.x, s.v)
+    return v
+end
 
+function POMDPs.convert_s(::Type{GAState}, v::AbstractVector{Float64}, 
+    mdp::GoAroundMDP)
+    s = GAState(v[1], v[2], v[3])
+    return s
+end
+
+include("runtest.jl")
 
 end # module
