@@ -1,4 +1,4 @@
-module GoAround
+#module GoAround
 
 #*******************************************************************************
 # PACKAGES
@@ -11,22 +11,24 @@ using StaticArrays
 using Parameters
 using GridInterpolations
 using POMDPModelTools
+using POMDPModels
 using Plots
+using LocalFunctionApproximation
+using LocalApproximationValueIteration 
 
 #*******************************************************************************
 # SETUP
 #*******************************************************************************
-plotly()
+#plotly()
 
 export
     GoAroundMDP,
-    GoAroundMDPVis,
     GAState
 
 mutable struct GAState
     x::Float64
     v::Float64
-    t::Float64
+    t::Int64
 end
 
 @with_kw struct GoAroundMDP <: MDP{GAState, Symbol}
@@ -38,7 +40,7 @@ end
 #*******************************************************************************
 # MDP FORMULATION
 #*******************************************************************************
-const go_around_actions = [:continue, :go_around]
+go_around_actions = [:continue, :go_around]
 POMDPs.actions(ga::GoAroundMDP) = go_around_actions
 POMDPs.discount(ga::GoAroundMDP) = ga.discount
 
@@ -52,27 +54,30 @@ function POMDPs.actionindex(ga::GoAroundMDP, a::Symbol)
     error("invalid GoAroundMDP action: $a")
 end
 
-# Define the transition function
-function POMDPs.transition(ga::GoAroundMDP, s::GAState, a::Symbol)
+
+function POMDPs.gen(ga::GoAroundMDP, s::GAState, a::Symbol, rng::AbstractRNG)
     if a==:continue
-        s.x = s.x + s.v
-        s.v = s.v + rand(Normal(0,1))
-        s.t = s.t - 1
-        return Deterministic(1.0)
+        x = s.x + s.v
+        v = s.v + rand(Normal(0,1))
+        t = s.t - 1
+        sp = GAState(x,v,t)
+        r = -1
+        return (sp=sp, r=r)
     else
-        s.x = 0
-        s.v = 0
-        s.t = s.t - 1
-        return Deterministic(1.0)
+        x = 0
+        v = 0
+        t = 0
+        r = -2
+        sp = GAState(x,v,t)
+        return (sp=sp, r=r)
     end
 end
-
 # Define the reward function
-function POMDPs.reward(ga::GoAroundMDP, s::GAState, a::Symbol)
+function POMDPs.reward(ga::GoAroundMDP, s::GAState, a::Symbol, sp::GAState)
     rew = 0.0
     if a==:continue
         if s.t==1 && s.x==40
-            rew = -1
+            rew = -2
         else
             rew = 0
         end
@@ -94,23 +99,44 @@ end
 function POMDPs.initialstate(ga::GoAroundMDP)
     x = 0
     v = 1
-    t = 48
-    return GAState(x,v,t)
+    t = 47
+    sp = GAState(x,v,t)
+    return (sp=sp)
 end
 
 # Define conversion functions for LocalApproximationValueIteration
-function POMDPs.convert_s(::Type{V} where V <: AbstractVector{Float64}, 
-    s::GAState, mdp::GoAroundMDP)
-    v = SVector{2,Float64}(s.x, s.v)
-    return v
-end
-
 function POMDPs.convert_s(::Type{GAState}, v::AbstractVector{Float64}, 
-    mdp::GoAroundMDP)
-    s = GAState(v[1], v[2], v[3])
+    ga::GoAroundMDP)
+    s = GAState(convert(Float64,v[1]),convert(Float64,v[2]),convert(Int64, v[3]))
     return s
 end
 
-include("runtest.jl")
+function POMDPs.convert_s(::Type{V} where V <: AbstractVector{Float64}, 
+    s::GAState, ga::GoAroundMDP)
+    v = SVector{3,Float64}(convert(Float64, s.x), convert(Float64, s.v), convert(Float64, s.t))
+    return v
+end
 
-end # module
+
+
+#include("runtest.jl")
+
+#end # module
+
+
+ga = GoAroundMDP()
+nx = 150; ny = 150
+x_spacing = range(first(ga.xlim), stop=last(ga.xlim), length=nx)
+y_spacing = range(first(ga.ylim), stop=last(ga.ylim), length=ny)
+grid = RectangleGrid(x_spacing, y_spacing, 0 : 1 : 47)
+
+interp = LocalGIFunctionApproximator(grid)
+approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=10)
+approx_policy = solve(approx_solver, ga)
+
+all_interp_values = get_all_interpolating_values(approx_policy.interp)
+all_interp_states = get_all_interpolating_points(approx_policy.interp)
+
+s = GAState(40,20,0)
+v = value(approx_policy, s)
+a = action(approx_policy, s)
