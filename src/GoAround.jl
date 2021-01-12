@@ -32,8 +32,8 @@ mutable struct GAState
 end
 
 @with_kw struct GoAroundMDP <: MDP{GAState, Symbol}
-    xlim::Tuple{Float64, Float64}                   = (0.0, 50.0)
-    ylim::Tuple{Float64, Float64}                   = (0.0, 50.0)
+    xlim::Tuple{Float64, Float64}                   = (0.0, 720.0)
+    ylim::Tuple{Float64, Float64}                   = (0.0, 54.0)
     discount::Float64                               = 0.95
 end
 
@@ -57,32 +57,38 @@ end
 
 function POMDPs.gen(ga::GoAroundMDP, s::GAState, a::Symbol, rng::AbstractRNG)
     if a==:continue
-        x = s.x + s.v
         v = s.v + rand(Normal(0,1))
+        # Same as Python code right now
+        x = s.x - (10/150)*v
         t = s.t - 1
         sp = GAState(x,v,t)
-        r = -1
+        r = reward(ga, s, a, sp)
         return (sp=sp, r=r)
     else
-        x = 0
+        x = 360
         v = 0
         t = 0
-        r = -2
         sp = GAState(x,v,t)
+        r = reward(ga, s, a, sp)
         return (sp=sp, r=r)
     end
 end
+
 # Define the reward function
 function POMDPs.reward(ga::GoAroundMDP, s::GAState, a::Symbol, sp::GAState)
     rew = 0.0
     if a==:continue
-        if s.t==1 && s.x==40
-            rew = -2
+        distance = abs(s.x-360)
+        #rew = (-1000/distance)*(0.95^(50-s.t))
+        if sp.t==0 && distance < 10
+        #if sp.t==0 && s.x==360
+            rew = -1
         else
             rew = 0
         end
     elseif a==:go_around
-        rew = -10*(0.2)^s.t - 0.5
+        rew = -(0.8)^s.t - 0.1
+        #rew = -20
     end
     return rew
 end
@@ -97,8 +103,8 @@ end
 
 # Define the initialstate function
 function POMDPs.initialstate(ga::GoAroundMDP)
-    x = 0
-    v = 1
+    x = rand(360:720)
+    v = rand(0:54)
     t = 47
     sp = GAState(x,v,t)
     return (sp=sp)
@@ -125,18 +131,45 @@ end
 
 
 ga = GoAroundMDP()
-nx = 150; ny = 150
+nx = 100; ny = 100
 x_spacing = range(first(ga.xlim), stop=last(ga.xlim), length=nx)
 y_spacing = range(first(ga.ylim), stop=last(ga.ylim), length=ny)
-grid = RectangleGrid(x_spacing, y_spacing, 0 : 1 : 47)
+grid = RectangleGrid(x_spacing, y_spacing, 0:1:47)
 
 interp = LocalGIFunctionApproximator(grid)
-approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=10)
+approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=20)
 approx_policy = solve(approx_solver, ga)
 
 all_interp_values = get_all_interpolating_values(approx_policy.interp)
 all_interp_states = get_all_interpolating_points(approx_policy.interp)
 
-s = GAState(40,20,0)
-v = value(approx_policy, s)
-a = action(approx_policy, s)
+#s = GAState(40,20,0)
+#v = value(approx_policy, s)
+#a = action(approx_policy, s)
+
+
+t_arr = 0:1:47
+test_arr = zeros(Int8, nx, ny, length(t_arr))
+for t in t_arr
+    for (i,pos) in enumerate(x_spacing)
+        for (j,vel) in enumerate(y_spacing)
+            state = GAState(pos,vel,t+1)
+            test_arr[i,j,t+1] = actionindex(ga, action(approx_policy, state))
+            #a = action(approx_policy, s)
+        end
+    end
+
+end
+#=
+for t in t_arr
+    
+    heatmap(test_arr[:,:,0],c=cgrad([:blue, :green, :yellow]),
+    xlabel="x values", ylabel="y values",
+    title="My title")
+    
+    println(sum(test_arr[:,:,t+1]))
+    println(t)
+end
+=#
+
+sum(test_arr)
