@@ -19,7 +19,6 @@ using LocalApproximationValueIteration
 #*******************************************************************************
 # SETUP
 #*******************************************************************************
-#plotly()
 
 export
     GoAroundMDP,
@@ -32,8 +31,8 @@ mutable struct GAState
 end
 
 @with_kw struct GoAroundMDP <: MDP{GAState, Symbol}
-    xlim::Tuple{Float64, Float64}                   = (0.0, 720.0)
-    ylim::Tuple{Float64, Float64}                   = (0.0, 54.0)
+    pos_lim::Tuple{Float64, Float64}                   = (0.0, 720.0)
+    vel_lim::Tuple{Float64, Float64}                   = (0.0, 54.0)
     discount::Float64                               = 0.95
 end
 
@@ -47,9 +46,9 @@ POMDPs.discount(ga::GoAroundMDP) = ga.discount
 # Define the actionindex function
 function POMDPs.actionindex(ga::GoAroundMDP, a::Symbol)
     if a==:continue
-        return 1
-    elseif a==:go_around
         return 2
+    elseif a==:go_around
+        return 1
     end
     error("invalid GoAroundMDP action: $a")
 end
@@ -95,19 +94,25 @@ end
 
 # Define the isterminal function
 function POMDPs.isterminal(ga::GoAroundMDP, a::Symbol, s::GAState)
+    #=
     if a==:go_around || s.t==0 
         return true 
     end
     return false
+    =#
+    return (a==:go_around || s.t==0 )
 end
 
 # Define the initialstate function
 function POMDPs.initialstate(ga::GoAroundMDP)
-    x = rand(360:720)
-    v = rand(0:54)
+    #x = rand(360:720)
+    #v = rand(0:54)
+    x = 700
+    v = 2
     t = 47
     sp = GAState(x,v,t)
-    return (sp=sp)
+    r = reward(ga, s, a, sp)
+    return (sp=sp, r=r)
 end
 
 # Define conversion functions for LocalApproximationValueIteration
@@ -123,53 +128,68 @@ function POMDPs.convert_s(::Type{V} where V <: AbstractVector{Float64},
     return v
 end
 
-
-
 #include("runtest.jl")
 
 #end # module
 
 
 ga = GoAroundMDP()
-nx = 100; ny = 100
-x_spacing = range(first(ga.xlim), stop=last(ga.xlim), length=nx)
-y_spacing = range(first(ga.ylim), stop=last(ga.ylim), length=ny)
+nx = 300; ny = 300
+x_spacing = range(first(ga.pos_lim), stop=last(ga.pos_lim), length=nx)
+y_spacing = range(first(ga.vel_lim), stop=last(ga.vel_lim), length=ny)
 grid = RectangleGrid(x_spacing, y_spacing, 0:1:47)
 
 interp = LocalGIFunctionApproximator(grid)
-approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=20)
+approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=10)
 approx_policy = solve(approx_solver, ga)
 
-all_interp_values = get_all_interpolating_values(approx_policy.interp)
-all_interp_states = get_all_interpolating_points(approx_policy.interp)
-
-#s = GAState(40,20,0)
-#v = value(approx_policy, s)
-#a = action(approx_policy, s)
-
-
 t_arr = 0:1:47
-test_arr = zeros(Int8, nx, ny, length(t_arr))
+policy_evolution = zeros(Int8, nx, ny, length(t_arr))
+value_function_evolution = zeros(Float64, nx, ny, length(t_arr))
+#test_arr = Array{String}(undef,nx,ny,length(t_arr))
 for t in t_arr
-    for (i,pos) in enumerate(x_spacing)
-        for (j,vel) in enumerate(y_spacing)
+    for (i,vel) in enumerate(y_spacing)
+        for (j,pos) in enumerate(x_spacing)
+        
             state = GAState(pos,vel,t+1)
-            test_arr[i,j,t+1] = actionindex(ga, action(approx_policy, state))
+            policy_evolution[i,j,t+1] = actionindex(ga, action(approx_policy, state))
+            value_function_evolution[i,j,t+1] = value(approx_policy, state)
+            #test_arr[i,j,t+1] = string(action(approx_policy, state))
             #a = action(approx_policy, s)
         end
     end
 
 end
+
+x_ticks = (x_spacing.-360)./240
+y_ticks = y_spacing
 #=
-for t in t_arr
-    
-    heatmap(test_arr[:,:,0],c=cgrad([:blue, :green, :yellow]),
-    xlabel="x values", ylabel="y values",
-    title="My title")
-    
-    println(sum(test_arr[:,:,t+1]))
-    println(t)
-end
+heatmap(x_ticks, y_ticks, test_arr[:,:,2],color=:viridis,
+xlabel="Ground Vehicle Distance from Runway Centerline (miles)", ylabel="Ground Vehicle Velocity (mph)",
+title="Time to Landing Seconds", colorbar=false)
+plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#440154", label="Continue")
+plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#fde725", label="Go Around")
 =#
 
-sum(test_arr)
+
+anim1 = @animate for i in 1:48
+    heatmap(x_ticks, y_ticks, policy_evolution[:,:,i],color=:viridis,
+    xlabel="Ground Vehicle Distance from Runway Centerline (miles)", 
+    ylabel="Ground Vehicle Velocity (mph)",
+    title="Time to Landing: $(48-i) Seconds", colorbar=false)
+    plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#440154", label="Go-Around")
+    plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#FDE725", label="Continue")
+    # Green #00FF7E
+    # Blue #0002FE
+end
+gif(anim1, "policy.gif", fps = 4)
+
+anim2 = @animate for i in 1:48
+    heatmap(x_ticks, y_ticks, value_function_evolution[:,:,i],color=:viridis,
+    xlabel="Ground Vehicle Distance from Runway Centerline (miles)", 
+    ylabel="Ground Vehicle Velocity (mph)",
+    title="Time to Landing: $(48-i) Seconds")
+    #plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#440154", label="Continue")
+    #plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#fde725", label="Go Around")
+end
+gif(anim2, "value_function.gif", fps = 4)
