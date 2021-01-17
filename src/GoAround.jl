@@ -19,20 +19,21 @@ using LocalApproximationValueIteration
 #*******************************************************************************
 # SETUP
 #*******************************************************************************
-
 export
     GoAroundMDP,
     GAState
 
+# Define a struct for the Go Around MDP state
 mutable struct GAState
     x::Float64
     v::Float64
     t::Int64
 end
 
+# Define a struct for the Go Around MDP
 @with_kw struct GoAroundMDP <: MDP{GAState, Symbol}
-    pos_lim::Tuple{Float64, Float64}                   = (0.0, 720.0)
-    vel_lim::Tuple{Float64, Float64}                   = (0.0, 54.0)
+    pos_lim::Tuple{Float64, Float64}                = (0.0, 720.0)
+    vel_lim::Tuple{Float64, Float64}                = (0.0, 54.0)
     discount::Float64                               = 0.95
 end
 
@@ -53,21 +54,20 @@ function POMDPs.actionindex(ga::GoAroundMDP, a::Symbol)
     error("invalid GoAroundMDP action: $a")
 end
 
-
+# Define the generative model
 function POMDPs.gen(ga::GoAroundMDP, s::GAState, a::Symbol, rng::AbstractRNG)
     if a==:continue
         v = s.v + rand(Normal(0,1))
-        # Same as Python code right now
         x = s.x - (10/150)*v
         t = s.t - 1
-        sp = GAState(x,v,t)
+        sp = GAState(x, v, t)
         r = reward(ga, s, a, sp)
         return (sp=sp, r=r)
     else
         x = 360
         v = 0
         t = 0
-        sp = GAState(x,v,t)
+        sp = GAState(x, v, t)
         r = reward(ga, s, a, sp)
         return (sp=sp, r=r)
     end
@@ -78,37 +78,26 @@ function POMDPs.reward(ga::GoAroundMDP, s::GAState, a::Symbol, sp::GAState)
     rew = 0.0
     if a==:continue
         distance = abs(s.x-360)
-        #rew = (-1000/distance)*(0.95^(50-s.t))
         if sp.t==0 && distance < 10
-        #if sp.t==0 && s.x==360
             rew = -1
         else
             rew = 0
         end
     elseif a==:go_around
-        rew = -(0.8)^s.t - 0.1
-        #rew = -20
+        rew = -5*(0.8)^s.t - 0.1
     end
     return rew
 end
 
 # Define the isterminal function
 function POMDPs.isterminal(ga::GoAroundMDP, a::Symbol, s::GAState)
-    #=
-    if a==:go_around || s.t==0 
-        return true 
-    end
-    return false
-    =#
-    return (a==:go_around || s.t==0 )
+    return (a==:go_around || s.t==0)
 end
 
 # Define the initialstate function
 function POMDPs.initialstate(ga::GoAroundMDP)
-    #x = rand(360:720)
-    #v = rand(0:54)
-    x = 700
-    v = 2
+    x = rand(360:720)
+    v = rand(0:54)
     t = 47
     sp = GAState(x,v,t)
     r = reward(ga, s, a, sp)
@@ -118,7 +107,7 @@ end
 # Define conversion functions for LocalApproximationValueIteration
 function POMDPs.convert_s(::Type{GAState}, v::AbstractVector{Float64}, 
     ga::GoAroundMDP)
-    s = GAState(convert(Float64,v[1]),convert(Float64,v[2]),convert(Int64, v[3]))
+    s = GAState(convert(Float64,v[1]), convert(Float64,v[2]), convert(Int64, v[3]))
     return s
 end
 
@@ -132,30 +121,28 @@ end
 
 #end # module
 
-
+# Instantiate the Go Around MDP and the grid
 ga = GoAroundMDP()
 nx = 300; ny = 300
 x_spacing = range(first(ga.pos_lim), stop=last(ga.pos_lim), length=nx)
 y_spacing = range(first(ga.vel_lim), stop=last(ga.vel_lim), length=ny)
 grid = RectangleGrid(x_spacing, y_spacing, 0:1:47)
 
+# Solve using LocalApproximationValueIteration
 interp = LocalGIFunctionApproximator(grid)
 approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=10)
 approx_policy = solve(approx_solver, ga)
 
-t_arr = 0:1:47
+# Extract the policy and value function
+t_arr = 1:1:48
 policy_evolution = zeros(Int8, nx, ny, length(t_arr))
 value_function_evolution = zeros(Float64, nx, ny, length(t_arr))
-#test_arr = Array{String}(undef,nx,ny,length(t_arr))
 for t in t_arr
     for (i,vel) in enumerate(y_spacing)
         for (j,pos) in enumerate(x_spacing)
-        
-            state = GAState(pos,vel,t+1)
-            policy_evolution[i,j,t+1] = actionindex(ga, action(approx_policy, state))
-            value_function_evolution[i,j,t+1] = value(approx_policy, state)
-            #test_arr[i,j,t+1] = string(action(approx_policy, state))
-            #a = action(approx_policy, s)
+            state = GAState(pos,vel,t)
+            policy_evolution[i,j,t] = actionindex(ga, action(approx_policy, state))
+            value_function_evolution[i,j,t] = value(approx_policy, state)
         end
     end
 
@@ -163,33 +150,21 @@ end
 
 x_ticks = (x_spacing.-360)./240
 y_ticks = y_spacing
-#=
-heatmap(x_ticks, y_ticks, test_arr[:,:,2],color=:viridis,
-xlabel="Ground Vehicle Distance from Runway Centerline (miles)", ylabel="Ground Vehicle Velocity (mph)",
-title="Time to Landing Seconds", colorbar=false)
-plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#440154", label="Continue")
-plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#fde725", label="Go Around")
-=#
 
-
-anim1 = @animate for i in 1:48
+policy_animation = @animate for i in 1:48
     heatmap(x_ticks, y_ticks, policy_evolution[:,:,i],color=:viridis,
     xlabel="Ground Vehicle Distance from Runway Centerline (miles)", 
     ylabel="Ground Vehicle Velocity (mph)",
     title="Time to Landing: $(48-i) Seconds", colorbar=false)
-    plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#440154", label="Go-Around")
-    plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#FDE725", label="Continue")
-    # Green #00FF7E
-    # Blue #0002FE
+    plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]), color="#440154", label="Go-Around")
+    plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]), color="#FDE725", label="Continue")
 end
-gif(anim1, "policy.gif", fps = 4)
+gif(policy_animation, "policy.gif", fps = 4)
 
-anim2 = @animate for i in 1:48
+value_function_animation = @animate for i in 1:48
     heatmap(x_ticks, y_ticks, value_function_evolution[:,:,i],color=:viridis,
     xlabel="Ground Vehicle Distance from Runway Centerline (miles)", 
     ylabel="Ground Vehicle Velocity (mph)",
     title="Time to Landing: $(48-i) Seconds")
-    #plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#440154", label="Continue")
-    #plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]),color="#fde725", label="Go Around")
 end
-gif(anim2, "value_function.gif", fps = 4)
+gif(value_function_animation, "value_function.gif", fps = 4)
