@@ -54,6 +54,14 @@ function POMDPs.actionindex(ga::GoAroundMDP, a::Symbol)
     error("invalid GoAroundMDP action: $a")
 end
 
+function get_terminal_state()
+    x = 0 
+    v = 0 
+    t = 0 # end of time
+    sp = GAState(x, v, t)
+    return sp
+end
+
 # Define the generative model
 function POMDPs.gen(ga::GoAroundMDP, s::GAState, a::Symbol, rng::AbstractRNG)
     if a==:continue
@@ -64,10 +72,7 @@ function POMDPs.gen(ga::GoAroundMDP, s::GAState, a::Symbol, rng::AbstractRNG)
         r = reward(ga, s, a, sp)
         return (sp=sp, r=r)
     else
-        x = 360
-        v = 0
-        t = 0
-        sp = GAState(x, v, t)
+        sp = get_terminal_state()
         r = reward(ga, s, a, sp)
         return (sp=sp, r=r)
     end
@@ -84,7 +89,7 @@ function POMDPs.reward(ga::GoAroundMDP, s::GAState, a::Symbol, sp::GAState)
             rew = 0
         end
     elseif a==:go_around
-        rew = -5*(0.8)^s.t - 0.1
+        rew = -1*(0.8)^s.t - 0.1
     end
     return rew
 end
@@ -93,6 +98,7 @@ end
 function POMDPs.isterminal(ga::GoAroundMDP, a::Symbol, s::GAState)
     return (a==:go_around || s.t==0)
 end
+
 
 # Define the initialstate function
 function POMDPs.initialstate(ga::GoAroundMDP)
@@ -123,26 +129,26 @@ end
 
 # Instantiate the Go Around MDP and the grid
 ga = GoAroundMDP()
-nx = 300; ny = 300
+nx = 100; ny = 100
 x_spacing = range(first(ga.pos_lim), stop=last(ga.pos_lim), length=nx)
 y_spacing = range(first(ga.vel_lim), stop=last(ga.vel_lim), length=ny)
 grid = RectangleGrid(x_spacing, y_spacing, 0:1:47)
 
 # Solve using LocalApproximationValueIteration
 interp = LocalGIFunctionApproximator(grid)
-approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=10)
+approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=47, verbose=true, is_mdp_generative=true, n_generative_samples=1)
 approx_policy = solve(approx_solver, ga)
 
 # Extract the policy and value function
-t_arr = 1:1:48
+t_arr = 48:-1:1
 policy_evolution = zeros(Int8, nx, ny, length(t_arr))
 value_function_evolution = zeros(Float64, nx, ny, length(t_arr))
 for t in t_arr
     for (i,vel) in enumerate(y_spacing)
         for (j,pos) in enumerate(x_spacing)
             state = GAState(pos,vel,t)
-            policy_evolution[i,j,t] = actionindex(ga, action(approx_policy, state))
-            value_function_evolution[i,j,t] = value(approx_policy, state)
+            policy_evolution[i,j,49-t] = actionindex(ga, action(approx_policy, state))
+            value_function_evolution[i,j,49-t] = value(approx_policy, state)
         end
     end
 
