@@ -15,6 +15,7 @@ using POMDPModels
 using Plots
 using LocalFunctionApproximation
 using LocalApproximationValueIteration 
+using HMMBase
 
 #*******************************************************************************
 # SETUP
@@ -136,7 +137,7 @@ grid = RectangleGrid(x_spacing, y_spacing, 0:1:47)
 
 # Solve using LocalApproximationValueIteration
 interp = LocalGIFunctionApproximator(grid)
-approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=47, verbose=true, is_mdp_generative=true, n_generative_samples=1)
+approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=5, verbose=true, is_mdp_generative=true, n_generative_samples=1)
 approx_policy = solve(approx_solver, ga)
 
 # Extract the policy and value function
@@ -173,4 +174,34 @@ value_function_animation = @animate for i in 1:48
     ylabel="Ground Vehicle Velocity (mph)",
     title="Time to Landing: $(48-i) Seconds")
 end
-gif(value_function_animation, "value_function.gif", fps = 4)
+#gif(value_function_animation, "value_function.gif", fps = 4)
+
+
+
+
+
+##******************************************************************************
+# HMM TEST
+#*******************************************************************************
+#hmm = HMM([0.9 0.1; 0.1 0.9], [Normal(0,1), Normal(1,1)])
+a = [0.99, 0.01]
+A = [0.9 0.1; 0.1 0.9]
+B = [MvNormal([0.0, 240.0], [18.0, 80.0]), MvNormal([54.0, 0.0], [18.0, 80.0])]
+hmm = HMM(a,A,B)
+y = [2 180; 3 170; 5 170; 8 160; 10 150; 10 140; 12 130; 14 120; 14 110; 15 110; 16 100; 18 100; 19 90;]
+post = posteriors(hmm,y)
+plot(post[:,1])
+
+
+
+
+
+# VEL SAFE
+#TruncatedNormal(0, 18, 0, 54)
+# VEL AGG
+#TruncatedNormal(54, 18, 0, 54)
+
+# POS SAFE
+#TruncatedNormal(240, 80, 0, 240)
+# POS AGG
+#TruncatedNormal(0, 80, 0, 240)

@@ -6,6 +6,7 @@ version = "0.1.0"
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
 GridInterpolations = "bb4c363b-b914-514b-8517-4eb369bc008a"
+HMMBase = "b2b3ca75-8444-5ffa-85e6-af70e2b64fe7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LocalApproximationValueIteration = "a40420fb-f401-52da-a663-f502e5b95060"
 LocalFunctionApproximation = "db97f5ab-fc25-52dd-a8f9-02a257c35074"
