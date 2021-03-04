@@ -4,6 +4,7 @@
 # PACKAGES
 #*******************************************************************************
 using Random
+using StatsPlots
 using Distributions
 using LinearAlgebra
 using POMDPs
@@ -31,11 +32,17 @@ mutable struct GAState
     t::Int64
 end
 
+a = [0.99, 0.01]
+A = [0.9 0.1; 0.1 0.9]
+#            Safe means      Safe sigmas            Danger means  Danger sigmas
+B = [MvNormal([360.0, 0.0], [120.0, 18.0]), MvNormal([0.0, 54.0], [120.0, 18.0])]
+
 # Define a struct for the Go Around MDP
 @with_kw struct GoAroundMDP <: MDP{GAState, Symbol}
     pos_lim::Tuple{Float64, Float64}                = (0.0, 720.0)
     vel_lim::Tuple{Float64, Float64}                = (0.0, 54.0)
-    discount::Float64                               = 0.95
+    discount::Float64                               = 0.95           
+    hmm::HMM{Multivariate,Float64}                  = HMM(a,A,B)
 end
 
 #*******************************************************************************
@@ -65,8 +72,11 @@ end
 
 # Define the generative model
 function POMDPs.gen(ga::GoAroundMDP, s::GAState, a::Symbol, rng::AbstractRNG)
+    post = posteriors(ga.hmm, [s.x s.v])
+    acc = 1 - 2*post[1,1]
     if a==:continue
-        v = s.v + rand(Normal(0,1))
+        #v = s.v + rand(Normal(0,1))
+        v = s.v + acc
         x = s.x - (10/150)*v
         t = s.t - 1
         sp = GAState(x, v, t)
@@ -137,7 +147,7 @@ grid = RectangleGrid(x_spacing, y_spacing, 0:1:47)
 
 # Solve using LocalApproximationValueIteration
 interp = LocalGIFunctionApproximator(grid)
-approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=5, verbose=true, is_mdp_generative=true, n_generative_samples=1)
+approx_solver = LocalApproximationValueIterationSolver(interp, max_iterations=1, verbose=true, is_mdp_generative=true, n_generative_samples=1)
 approx_policy = solve(approx_solver, ga)
 
 # Extract the policy and value function
@@ -174,7 +184,7 @@ value_function_animation = @animate for i in 1:48
     ylabel="Ground Vehicle Velocity (mph)",
     title="Time to Landing: $(48-i) Seconds")
 end
-#gif(value_function_animation, "value_function.gif", fps = 4)
+gif(value_function_animation, "value_function.gif", fps = 4)
 
 
 
@@ -186,22 +196,42 @@ end
 #hmm = HMM([0.9 0.1; 0.1 0.9], [Normal(0,1), Normal(1,1)])
 a = [0.99, 0.01]
 A = [0.9 0.1; 0.1 0.9]
-B = [MvNormal([0.0, 240.0], [18.0, 80.0]), MvNormal([54.0, 0.0], [18.0, 80.0])]
+#             Safe means     Safe sigmas            Danger means  Danger sigmas
+#B = [MvNormal([360.0, 0.0], [120.0, 18.0]), MvNormal([0.0, 54.0], [120.0, 18.0])]
+B = [MvNormal([360.0, 0.0], [120.0, 54.0]), MvNormal([0.0, 54.0], [120.0, 54.0])]
+y = [180 2; 170 3; 170 5; 160 8; 150 10; 140 10; 130 12; 120 14; 110 14; 110 15; 100 16; 100 18; 90 19;]
+y = [180 2; 170 3; 170 5; 160 8; 150 10; 140 10; 130 12; 120 14; 120 14; 120 12; 130 12; 140 10; 160 8;]
 hmm = HMM(a,A,B)
-y = [2 180; 3 170; 5 170; 8 160; 10 150; 10 140; 12 130; 14 120; 14 110; 15 110; 16 100; 18 100; 19 90;]
+#y = [90 19];
 post = posteriors(hmm,y)
 plot(post[:,1])
+plot!(post[:,2])
 
+##
+plot(TruncatedNormal(0,120,0,360), color = :red, fill=(0, .5,:red),label="Agressive",xlabel = "Position",)
+plot!(TruncatedNormal(360,120,0,360), color = :blue, fill=(0, .5,:blue),label="Safe")
+savefig("pos_dist.png")
 
+#0,18,0,54
+#54,18,0,54
+plot(TruncatedNormal(-54,108,0,54), color = :blue, fill=(0, .5,:blue),label="Safe",xlabel = "Velocity",)
+plot!(TruncatedNormal(108,108,0,54), color =:red, fill=(0, .5,:red),label="Aggressive")
+savefig("vel_dist.png")
 
+##
+pos_arr = range(0, stop=360, length=100)
+vel_arr = range(0, stop=54, length=100)
+latent_state_arr = Array{Float64,2}(undef, 100, 100)
+for (i,vel) in enumerate(vel_arr)
+    for (j,pos) in enumerate(pos_arr)
+       post =  posteriors(hmm,[pos vel])
+       latent_state_arr[i,j] = post[1,1]
+    end
+end
 
+heatmap(pos_arr, vel_arr, latent_state_arr,color=:viridis,xlabel = "Position",ylabel="Velocity")
+plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]), color="#440154", label="Aggressive")
+plot!(Shape([0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]), color="#FDE725", label="Passive")
+savefig("latent_behavior.png")
 
-# VEL SAFE
-#TruncatedNormal(0, 18, 0, 54)
-# VEL AGG
-#TruncatedNormal(54, 18, 0, 54)
-
-# POS SAFE
-#TruncatedNormal(240, 80, 0, 240)
-# POS AGG
-#TruncatedNormal(0, 80, 0, 240)
+# Array{Int64,4}(undef, 1000, 1000, 48, 2)
