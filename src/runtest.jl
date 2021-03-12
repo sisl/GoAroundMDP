@@ -8,7 +8,7 @@ using LocalApproximationValueIteration
 #plotly()
 
 
-ga = GoAroundMDP()
+ga = GoAroundPOMDP()
 #print(ga.actions)
 
 nx = 150; ny = 150
