@@ -13,7 +13,7 @@ using POMDPModelTools
 using POMDPModels
 using Plots
 using LocalFunctionApproximation
-using LocalApproximationValueIteration 
+using LocalApproximationValueIteration
 using CSV
 using DataFrames
 
@@ -97,7 +97,7 @@ function POMDPs.gen(ga::GoAroundPOMDP, s::GAState, a::Symbol, rng::AbstractRNG)
     else
         sp = get_terminal_state()
         r = reward(ga, s, a, sp)
-        return (sp=sp, r=r)
+        return (sp=sp, o=o, r=r)
     end
 end
 
@@ -160,8 +160,8 @@ grid = RectangleGrid(x_spacing, y_spacing, 0:1:1, 0:1:47)
 # Solve using LocalApproximationValueIteration
 interp = LocalGIFunctionApproximator(grid)
 approx_solver = LocalApproximationValueIterationSolver(
-    interp, max_iterations=5, verbose=true, is_mdp_generative=true, 
-    n_generative_samples=5)
+    interp, max_iterations=1, verbose=true, is_mdp_generative=true, 
+    n_generative_samples=1)
 approx_policy = solve(approx_solver, UnderlyingMDP(ga))
 
 # Extract the policy and value function
