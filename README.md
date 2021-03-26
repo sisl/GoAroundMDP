@@ -16,3 +16,4 @@ and a passive ground vehicle remains passive with a high probability.
 
 "landing_scenario.gif" provides a visualization of the scenario.
 
+![landing_scenario](https://user-images.githubusercontent.com/21223290/112575253-3308b780-8dad-11eb-8aa1-5bd93eecf225.gif)
